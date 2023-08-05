@@ -33,6 +33,7 @@ go mod init myapi
 go get -u github.com/gin-gonic/gin
 go get -u github.com/jinzhu/gorm
 go get -u github.com/jinzhu/gorm/dialects/postgres
+go get -u github.com/google/uuid
 ```
 
 5. Build the project:
