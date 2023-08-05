@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -56,6 +57,17 @@ func main() {
 			return
 		}
 
+		// Check latitude and longitude restrictions
+		if !isValidLatitude(delivery.Pickup.PickupLat) || !isValidLongitude(delivery.Pickup.PickupLon) ||
+			!isValidLatitude(delivery.Dropoff.DropoffLat) || !isValidLongitude(delivery.Dropoff.DropoffLon) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid latitude or longitude"})
+			return
+		}
+
+		// Generate ID and set CreationDate
+		delivery.ID = generateID()
+		delivery.CreationDate = time.Now()
+
 		// Save the delivery to the database
 		if err := db.Create(&delivery).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create delivery"})
@@ -66,4 +78,16 @@ func main() {
 	})
 
 	router.Run(":8080")
+}
+
+func generateID() string {
+	return uuid.New().String()
+}
+
+func isValidLatitude(lat float64) bool {
+	return lat >= -90 && lat <= 90
+}
+
+func isValidLongitude(lon float64) bool {
+	return lon >= -180 && lon <= 180
 }
