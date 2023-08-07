@@ -132,6 +132,32 @@ func main() {
 		})
 	})
 
+	router.GET("/deliveries/by-date", func(c *gin.Context) {
+		dateFilter := c.DefaultQuery("date", "")
+		layout := "2006-01-02"
+
+		if dateFilter == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Date parameter is required"})
+			return
+		}
+
+		filterDate, err := time.Parse(layout, dateFilter)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use yyyy-mm-dd"})
+			return
+		}
+
+		var deliveries []Delivery
+
+		// Filter deliveries by date
+		if err := db.Where("DATE(creation_date) = ?", filterDate).Find(&deliveries).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch deliveries"})
+			return
+		}
+
+		c.JSON(http.StatusOK, deliveries)
+	})
+
 	router.Run(":8080")
 }
 
