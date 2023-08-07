@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -102,6 +103,35 @@ func main() {
 		c.JSON(http.StatusOK, deliveries)
 	})
 
+	router.GET("/deliveries", func(c *gin.Context) {
+		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+		perPage, _ := strconv.Atoi(c.DefaultQuery("perPage", "10"))
+
+		if page < 1 {
+			page = 1
+		}
+		if perPage < 1 {
+			perPage = 10
+		}
+
+		var deliveries []Delivery
+		offset := (page - 1) * perPage
+
+		if err := db.Offset(offset).Limit(perPage).Find(&deliveries).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch deliveries"})
+			return
+		}
+
+		total := getTotalDeliveries()
+
+		c.JSON(http.StatusOK, gin.H{
+			"page":       page,
+			"perPage":    perPage,
+			"total":      total,
+			"deliveries": deliveries,
+		})
+	})
+
 	router.Run(":8080")
 }
 
@@ -115,4 +145,12 @@ func isValidLatitude(lat float64) bool {
 
 func isValidLongitude(lon float64) bool {
 	return lon >= -180 && lon <= 180
+}
+
+func getTotalDeliveries() int64 {
+	var total int64
+	if err := db.Model(&Delivery{}).Count(&total).Error; err != nil {
+		return 0
+	}
+	return total
 }
