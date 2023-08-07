@@ -22,7 +22,8 @@ type Delivery struct {
 		DropoffLat float64 `json:"dropoff_lat" gorm:"-"`
 		DropoffLon float64 `json:"dropoff_lon" gorm:"-"`
 	} `json:"dropoff" gorm:"-"`
-	ZoneID string `json:"zone_id"`
+	ZoneID    string `json:"zone_id"`
+	CreatorID string `json:"creator_id"`
 }
 
 var db *gorm.DB
@@ -75,6 +76,30 @@ func main() {
 		}
 
 		c.JSON(http.StatusCreated, delivery)
+	})
+
+	router.GET("/deliveries/:id", func(c *gin.Context) {
+		id := c.Param("id")
+
+		var delivery Delivery
+		if err := db.Where("id = ?", id).First(&delivery).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Delivery not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, delivery)
+	})
+
+	router.GET("/deliveries/creator/:creatorID", func(c *gin.Context) {
+		creatorID := c.Param("creatorID")
+
+		var deliveries []Delivery
+		if err := db.Where("creator_id = ?", creatorID).Find(&deliveries).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch deliveries"})
+			return
+		}
+
+		c.JSON(http.StatusOK, deliveries)
 	})
 
 	router.Run(":8080")
