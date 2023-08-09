@@ -194,6 +194,18 @@ func main() {
 		c.JSON(http.StatusCreated, bot)
 	})
 
+	router.GET("/bots/by-zone/:zoneID", func(c *gin.Context) {
+		zoneID := c.Param("zoneID")
+
+		var bots []Bot
+		if err := db.Where("zone_id = ?", zoneID).Find(&bots).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch bots by zone"})
+			return
+		}
+
+		c.JSON(http.StatusOK, bots)
+	})
+
 	router.Run(":8080")
 }
 
