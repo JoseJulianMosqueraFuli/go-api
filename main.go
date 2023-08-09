@@ -28,6 +28,16 @@ type Delivery struct {
 	CreatorID string `json:"creator_id"`
 }
 
+type Bot struct {
+	ID       string `json:"id" gorm:"primary_key"`
+	Status   string `json:"status"`
+	Location struct {
+		Lat float64 `json:"lat"`
+		Lon float64 `json:"lon"`
+	} `json:"location" json:"location" gorm:"-"`
+	ZoneID string `json:"zone_id"`
+}
+
 var db *gorm.DB
 
 func main() {
@@ -39,10 +49,10 @@ func main() {
 		panic("failed to connect database")
 	}
 
-	// Automatically create the Delivery table if it doesn't exist
-	err = db.AutoMigrate(&Delivery{})
+	// Automatically create the Delivery and Bot table if it doesn't exist
+	err = db.AutoMigrate(&Delivery{}, &Bot{})
 	if err != nil {
-		panic("failed to create table")
+		panic("failed to create tables")
 	}
 
 	router := gin.Default()
@@ -157,6 +167,31 @@ func main() {
 		}
 
 		c.JSON(http.StatusOK, deliveries)
+	})
+
+	router.POST("/bots", func(c *gin.Context) {
+		var bot Bot
+		if err := c.ShouldBindJSON(&bot); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Check latitude and longitude restrictions
+		if !isValidLatitude(bot.Location.Lat) || !isValidLongitude(bot.Location.Lon) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid latitude or longitude"})
+			return
+		}
+
+		// Generate ID for the bot
+		bot.ID = generateID()
+
+		// Save the bot to the database
+		if err := db.Create(&bot).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create bot"})
+			return
+		}
+
+		c.JSON(http.StatusCreated, bot)
 	})
 
 	router.Run(":8080")
