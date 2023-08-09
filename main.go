@@ -17,12 +17,12 @@ type Delivery struct {
 	CreationDate time.Time `json:"creation_date"`
 	State        string    `json:"state"`
 	Pickup       struct {
-		PickupLat float64 `json:"pickup_lat" gorm:"-"`
-		PickupLon float64 `json:"pickup_lon" gorm:"-"`
+		PickupLat float64 `json:"pickup_lat"`
+		PickupLon float64 `json:"pickup_lon"`
 	} `json:"pickup" gorm:"-"`
 	Dropoff struct {
-		DropoffLat float64 `json:"dropoff_lat" gorm:"-"`
-		DropoffLon float64 `json:"dropoff_lon" gorm:"-"`
+		DropoffLat float64 `json:"dropoff_lat"`
+		DropoffLon float64 `json:"dropoff_lon"`
 	} `json:"dropoff" gorm:"-"`
 	ZoneID    string `json:"zone_id"`
 	CreatorID string `json:"creator_id"`
