@@ -206,6 +206,40 @@ func main() {
 		c.JSON(http.StatusOK, bots)
 	})
 
+	router.PUT("/deliveries/assign-bot/:id", func(c *gin.Context) {
+		deliveryID := c.Param("id")
+		var delivery Delivery
+
+		if err := db.Where("id = ?", deliveryID).First(&delivery).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Delivery not found"})
+			return
+		}
+
+		var bot Bot
+		if err := db.Where("status = 'available'").First(&bot).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "No available bots"})
+			return
+		}
+
+		// Assign the bot to the delivery
+		delivery.AssignedBotID = bot.ID
+		delivery.State = "assigned"
+
+		if err := db.Save(&delivery).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign bot to delivery"})
+			return
+		}
+
+		// Update the bot's status to busy
+		bot.Status = "busy"
+		if err := db.Save(&bot).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update bot status"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Bot assigned successfully"})
+	})
+
 	router.Run(":8080")
 }
 
