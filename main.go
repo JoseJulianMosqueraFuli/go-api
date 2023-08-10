@@ -24,8 +24,9 @@ type Delivery struct {
 		DropoffLat float64 `json:"dropoff_lat"`
 		DropoffLon float64 `json:"dropoff_lon"`
 	} `json:"dropoff" gorm:"-"`
-	ZoneID    string `json:"zone_id"`
-	CreatorID string `json:"creator_id"`
+	ZoneID        string `json:"zone_id"`
+	CreatorID     string `json:"creator_id"`
+	AssignedBotID string `json:"assigned_bot_id"`
 }
 
 type Bot struct {
@@ -215,14 +216,21 @@ func main() {
 			return
 		}
 
-		var bot Bot
-		if err := db.Where("status = 'available'").First(&bot).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "No available bots"})
+		// Check if the delivery is already assigned
+		if delivery.AssignedBotID != "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Delivery is already assigned to a bot"})
+			return
+		}
+
+		// Find the nearest available bot in the same zone as the delivery
+		nearestBot, err := findNearestAvailableBot(delivery.Pickup.PickupLat, delivery.Pickup.PickupLon, delivery.ZoneID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find available bot"})
 			return
 		}
 
 		// Assign the bot to the delivery
-		delivery.AssignedBotID = bot.ID
+		delivery.AssignedBotID = nearestBot.ID
 		delivery.State = "assigned"
 
 		if err := db.Save(&delivery).Error; err != nil {
@@ -231,8 +239,8 @@ func main() {
 		}
 
 		// Update the bot's status to busy
-		bot.Status = "busy"
-		if err := db.Save(&bot).Error; err != nil {
+		nearestBot.Status = "busy"
+		if err := db.Save(&nearestBot).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update bot status"})
 			return
 		}
@@ -284,4 +292,24 @@ func CalculateHaversineDistance(lat1, lon1, lat2, lon2 float64) float64 {
 	distance := earthRadius * c
 
 	return distance
+}
+
+func findNearestAvailableBot(pickupLat, pickupLon float64, zoneID string) (Bot, error) {
+	var availableBots []Bot
+	if err := db.Where("status = 'available' AND zone_id = ?", zoneID).Find(&availableBots).Error; err != nil {
+		return Bot{}, err
+	}
+
+	var nearestBot Bot
+	minDistance := math.MaxFloat64
+
+	for _, bot := range availableBots {
+		distance := CalculateHaversineDistance(pickupLat, pickupLon, bot.Location.Lat, bot.Location.Lon)
+		if distance < minDistance {
+			nearestBot = bot
+			minDistance = distance
+		}
+	}
+
+	return nearestBot, nil
 }
