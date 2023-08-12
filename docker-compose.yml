@@ -1,12 +1,14 @@
 version: "3.8"
 services:
-  myapi:
+  web:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
     restart: always
+    volumes:
+      - web-data:/app/data
     depends_on:
       - db
   db:
@@ -18,3 +20,8 @@ services:
     ports:
       - "5432:5432"
     restart: always
+    volumes:
+      - db-data:/var/lib/postgresql/data
+volumes:
+  web-data:
+  db-data:

@@ -1,13 +1,16 @@
 package main
 
 import (
+	"fmt"
 	"math"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -39,29 +42,94 @@ type Bot struct {
 	ZoneID string `json:"zone_id"`
 }
 
+type User struct {
+	ID           string `json:"id" gorm:"primary_key"`
+	Username     string `json:"username"`
+	PasswordHash string `json:"-"`
+}
+
 var db *gorm.DB
 
 func main() {
 	// Replace the database connection string with the correct values for your PostgreSQL setup
 	dsn := "host=db user=user password=password dbname=db port=5432 sslmode=disable"
-	var err error
-	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+
+	fmt.Println("Connecting to the database...")
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		panic("failed to connect database")
+		panic("failed to connect database: " + err.Error())
 	}
 
-	// Automatically create the Delivery and Bot table if it doesn't exist
-	err = db.AutoMigrate(&Delivery{}, &Bot{})
-	if err != nil {
-		panic("failed to create tables")
+	fmt.Println("Connected to the database")
+
+	// Automatically create the Delivery, Bot, and User tables if they don't exist
+	fmt.Println("Migrating tables...")
+	if err := db.AutoMigrate(&Delivery{}, &Bot{}, &User{}); err != nil {
+		panic("failed to create tables: " + err.Error())
 	}
+
+	fmt.Println("Tables migrated successfully")
 
 	router := gin.Default()
 
-	router.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "Hello, world!",
-		})
+	router.POST("/register", func(c *gin.Context) {
+		var newUser User
+		if err := c.ShouldBindJSON(&newUser); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Hash the user's password
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newUser.PasswordHash), bcrypt.DefaultCost)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+			return
+		}
+
+		newUser.ID = generateID()
+		newUser.PasswordHash = string(hashedPassword)
+
+		fmt.Println("New user created", newUser)
+		if err := db.Create(&newUser).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+			return
+		}
+
+		c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully"})
+	})
+
+	router.POST("/login", func(c *gin.Context) {
+		var loginData struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		}
+
+		fmt.Println("Login Data:", loginData)
+		if err := c.ShouldBindJSON(&loginData); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		var user User
+		if err := db.Where("username = ?", loginData.Username).First(&user).Error; err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials Exist"})
+			return
+		}
+
+		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(loginData.Password)); err != nil {
+			fmt.Println("Has Compare:", user.PasswordHash, loginData.Password, []byte(user.PasswordHash), []byte(loginData.Password))
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials Compare"})
+			return
+		}
+
+		// Generate a JWT token and send it in the response
+		token, err := generateJWTToken(user)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"token": token})
 	})
 
 	router.POST("/deliveries", func(c *gin.Context) {
@@ -312,4 +380,44 @@ func findNearestAvailableBot(pickupLat, pickupLon float64, zoneID string) (Bot, 
 	}
 
 	return nearestBot, nil
+}
+
+func authenticateMiddleware(c *gin.Context) {
+	// Get the token from the request header
+	tokenString := c.GetHeader("Authorization")
+
+	// Validate the token
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return []byte("your-secret-key"), nil
+	})
+
+	if err != nil || !token.Valid {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		c.Abort()
+		return
+	}
+
+	// Set the user ID in the context
+	claims := token.Claims.(jwt.MapClaims)
+	userID := claims["sub"].(string)
+	c.Set("userID", userID)
+
+	c.Next()
+}
+
+func generateJWTToken(user User) (string, error) {
+	// Definir los claims del token
+	claims := jwt.MapClaims{
+		"sub": user.ID,                               // Sub claim contiene el ID del usuario
+		"exp": time.Now().Add(time.Hour * 24).Unix(), // Token expira en 24 horas
+	}
+
+	// Crear el token con los claims y firmarlo con una clave secreta
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte("your-secret-key"))
+	if err != nil {
+		return "", err
+	}
+
+	return tokenString, nil
 }
