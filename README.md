@@ -53,6 +53,26 @@ The API will be accessible at http://localhost:8080/.
 
 ## API Endpoints: Available endpoints
 
+### POST /register: Create a new registration user:
+
+```bash
+{
+  'username' : '<username>',
+  'password' : '<password>'
+}
+```
+
+### POST /login: Access user token:
+
+```bash
+{
+  'username' : '<username>',
+  'password' : '<password>'
+
+}
+
+```
+
 ### POST /deliveries: Create a new delivery.
 
 - Example JSON request body:
@@ -73,12 +93,34 @@ The API will be accessible at http://localhost:8080/.
 }
 ```
 
-### GET /: Get a simple "Hello, world!" message.
+### GET /deliveries/:id :
 
-```json
-{
-  "message": "Hello, world!"
-}
+```bash
+
+```
+
+### GET /deliveries/creator/:creatorID :
+
+```bash
+
+```
+
+### GET /deliveries:
+
+```bash
+
+```
+
+### POST /deliveries/by-date: :
+
+```bash
+
+```
+
+### POST /bots:
+
+```bash
+
 ```
 
 ## Author
